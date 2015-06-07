@@ -70,7 +70,23 @@ main(List<String> args) async {
         "message": "Success!"
       };
     }),
-    "connection": (String path) => new ConnectionNode(path)
+    "connection": (String path) => new ConnectionNode(path),
+    "listAllMembers": (String path) => new SimpleActionNode(path, (Map<String, dynamic> params) {
+      var x = link["/${path.split("/")[1]}/Team_Members"];
+      return x.children.values.map((SimpleNode x) {
+        if (x.path.endsWith("/List_All")) {
+          return null;
+        }
+        n(String nl) => link.val("${x.path}/${nl}");
+        return {
+          "id": n("ID"),
+          "name": x.configs[r"$name"],
+          "username": n("Username"),
+          "realname": n("Real_Name"),
+          "presence": n("Presence")
+        };
+      }).where((a) => a != null).toList();
+    })
   }, autoInitialize: false);
 
   link.configure();
@@ -92,7 +108,35 @@ class ConnectionNode extends SimpleNode {
 
     var x = {
       "Team_Members": {
-        r"$name": "Team Members"
+        r"$name": "Team Members",
+        "List_All": {
+          r"$is": "listAllMembers",
+          r"$invokable": "read",
+          r"$name": "List All",
+          r"$result": "table",
+          r"$columns": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "username",
+              "type": "string"
+            },
+            {
+              "name": "realname",
+              "type": "string"
+            },
+            {
+              "name": "presence",
+              "type": "string"
+            }
+          ]
+        }
       }
     };
 
@@ -118,6 +162,12 @@ class ConnectionNode extends SimpleNode {
 
   syncUsers({bool initial: false}) async {
     var users = await client.listTeamMembers();
+    for (var x in (link.provider as SimpleNodeProvider).nodes.keys) {
+      if (x.startsWith("${path}/Team_Members/") && !x.endsWith("/List_All")) {
+        link.removeNode(x);
+      }
+    }
+
     for (SlackUser user in users) {
       await addTeamMember(user, initial: initial);
     }
@@ -163,6 +213,7 @@ class ConnectionNode extends SimpleNode {
         "?value": user.isOwner == null ? false : user.isOwner
       }
     });
+    link["${path}/Team_Members"].addChild(user.id, link["${path}/Team_Members/${user.id}"]);
     save();
   }
 
