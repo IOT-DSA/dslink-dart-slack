@@ -83,7 +83,8 @@ main(List<String> args) async {
           "name": x.configs[r"$name"],
           "username": n("Username"),
           "realname": n("Real_Name"),
-          "presence": n("Presence")
+          "presence": n("Presence"),
+          "image": n("Profile_Image")
         };
       }).where((a) => a != null).toList();
     }),
@@ -139,6 +140,10 @@ class ConnectionNode extends SimpleNode {
             {
               "name": "presence",
               "type": "string"
+            },
+            {
+              "name": "image",
+              "type": "string"
             }
           ]
         }
@@ -153,6 +158,10 @@ class ConnectionNode extends SimpleNode {
       link.addNode("${path}/${key}", x[key]);
     }
 
+    bot.on("user_change").listen((e) {
+      syncUsers();
+    });
+
     bot.on("presence_change").listen((e) {
       link.val("${path}/Team_Members/${e["user"]}/Presence", e["presence"]);
     });
@@ -163,6 +172,26 @@ class ConnectionNode extends SimpleNode {
 
     bot.on("team_join").listen((e) {
       syncUsers();
+    });
+
+    bot.on("channel_created").listen((e) {
+      syncChannels();
+    });
+
+    bot.on("channel_joined").listen((e) {
+      syncChannels();
+    });
+
+    bot.on("channel_left").listen((e) {
+      syncChannels();
+    });
+
+    bot.on("channel_deleted").listen((e) {
+      syncChannels();
+    });
+
+    bot.on("channel_rename").listen((e) {
+      syncChannels();
     });
 
     await syncUsers(initial: true);
@@ -184,13 +213,17 @@ class ConnectionNode extends SimpleNode {
 
   syncChannels() async {
     var channels = await client.listChannels();
+    link.removeNode("${path}/Channels");
+    link.addNode("${path}/Channels", {});
     for (var channel in channels) {
       await addChannel(channel);
     }
   }
 
   addChannel(SlackChannel channel) async {
-    link.addNode("${path}/Channels/${channel.id}", {
+    var p = "${path}/Channels/${channel.id}";
+    link.removeNode(p);
+    var m = {
       r"$name": channel.name,
       "ID": {
         r"$type": "string",
@@ -207,24 +240,51 @@ class ConnectionNode extends SimpleNode {
       },
       "Topic": {
         r"$type": "string",
-        "?value": channel.topic.value
+        "?value": channel.topic.value,
+        "Set_By": {
+          r"$name": "Set By",
+          r"$type": "string",
+          "?value": channel.topic.creator
+        },
+        "Last_Set": {
+          r"$name": "Last Set",
+          r"$type": "number",
+          "?value": channel.topic.lastSet
+        }
       },
       "Purpose": {
         r"$type": "string",
-        "?value": channel.purpose.value
-      },
-      "Send_Message": {
-        r"$name": "Send Message",
-        r"$is": "sendChannelMessage",
-        r"$invokable": "write",
-        r"$params": [
-          {
-            "name": "message",
-            "type": "string"
-          }
-        ]
+        "?value": channel.purpose.value,
+        "Set_By": {
+          r"$name": "Set By",
+          r"$type": "string",
+          "?value": channel.purpose.creator
+        },
+        "Last_Set": {
+          r"$name": "Last Set",
+          r"$type": "number",
+          "?value": channel.purpose.lastSet
+        }
       }
-    });
+    };
+
+    if (channel.isMember) {
+      m.addAll({
+        "Send_Message": {
+          r"$name": "Send Message",
+          r"$is": "sendChannelMessage",
+          r"$invokable": "write",
+          r"$params": [
+            {
+              "name": "message",
+              "type": "string"
+            }
+          ]
+        }
+      });
+    }
+
+    link.addNode(p, m);
   }
 
   addTeamMember(SlackUser user, {bool initial: false}) async {
