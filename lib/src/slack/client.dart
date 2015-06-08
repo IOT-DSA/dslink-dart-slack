@@ -51,17 +51,11 @@ class SlackClient {
     });
   }
 
-  Future<Map<String, dynamic>> getChannelInfo(String id) {
+  Future<SlackChannel> getChannelInfo(String id) {
     return sendRequest("channels.info", parameters: {
       "channel": id
     }).then((response) {
-      return response["channel"];
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> getChannels() {
-    return sendRequest("channels.list").then((response) {
-      return response["channels"];
+      return SlackChannel.fromJSON(response["channel"]);
     });
   }
 
@@ -105,14 +99,14 @@ class SlackClient {
       return _nameCache.keys.firstWhere((x) => _nameCache[x] == name);
     }
 
-    return getChannels().then((channels) {
-      var possible = channels.where((it) => it["name"] == name || it["name"] == name.substring(1));
+    return listChannels().then((List<SlackChannel> channels) {
+      var possible = channels.where((it) => it.name == name || it.name == name.substring(1));
       if (possible.isEmpty) {
         return null;
       }
       var real = possible.first;
-      _nameCache[real["id"]] = real["name"];
-      return real["id"];
+      _nameCache[real.id] = real.name;
+      return real.id;
     });
   }
 
@@ -149,6 +143,11 @@ class SlackClient {
     return sendRequest("users.getPresence", parameters: {
       "user": id
     }).then((x) => x["presence"]);
+  }
+
+  Future<List<SlackChannel>> listChannels() async {
+    var json = await sendRequest("channels.list");
+    return json["channels"].map((x) => SlackChannel.fromJSON(x)).toList();
   }
 }
 
@@ -209,5 +208,45 @@ class SlackUserProfile {
     profile.image72 = json["image_72"];
     profile.image192 = json["image_192"];
     return profile;
+  }
+}
+
+class SlackChannel {
+  String id;
+  String name;
+  int created;
+  String creator;
+  bool isArchived;
+  bool isMember;
+  int numberOfMembers;
+  SlackChannelTopic topic;
+  SlackChannelTopic purpose;
+
+  static SlackChannel fromJSON(json) {
+    var x = new SlackChannel();
+    x.id = json["id"];
+    x.name = json["name"];
+    x.created = json["created"];
+    x.creator = json["creator"];
+    x.isArchived = json["is_archived"];
+    x.isMember = json["is_member"];
+    x.numberOfMembers = json["num_members"];
+    x.topic = SlackChannelTopic.fromJSON(json["topic"]);
+    x.purpose = SlackChannelTopic.fromJSON(json["purpose"]);
+    return x;
+  }
+}
+
+class SlackChannelTopic {
+  String value;
+  String creator;
+  int lastSet;
+
+  static SlackChannelTopic fromJSON(json) {
+    var x = new SlackChannelTopic();
+    x.value = json["value"];
+    x.creator = json["creator"];
+    x.lastSet = json["last_set"];
+    return x;
   }
 }
