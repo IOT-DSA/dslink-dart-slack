@@ -200,7 +200,7 @@ class ConnectionNode extends SimpleNode {
 
   syncUsers({bool initial: false}) async {
     var users = await client.listTeamMembers();
-    for (var x in (link.provider as SimpleNodeProvider).nodes.keys) {
+    for (var x in (link.provider as SimpleNodeProvider).nodes.keys.toList()) {
       if (x.startsWith("${path}/Team_Members/") && !x.endsWith("/List_All")) {
         link.removeNode(x);
       }
