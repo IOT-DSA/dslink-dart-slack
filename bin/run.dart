@@ -154,7 +154,9 @@ class ConnectionNode extends SimpleNode {
     };
 
     for (var key in x.keys) {
-      link.removeNode("${path}/${key}");
+      try {
+        link.removeNode("${path}/${key}");
+      } catch (e) {}
       link.addNode("${path}/${key}", x[key]);
     }
 
