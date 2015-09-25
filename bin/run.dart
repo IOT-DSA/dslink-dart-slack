@@ -165,11 +165,15 @@ class ConnectionNode extends SimpleNode {
     });
 
     bot.on("presence_change").listen((e) {
-      link.val("${path}/Team_Members/${e["user"]}/Presence", e["presence"]);
+      try {
+        link.val("${path}/Team_Members/${e["user"]}/Presence", e["presence"]);
+      } catch (e) {}
     });
 
     bot.on("manual_presence_change").listen((e) {
-      link.val("${path}/Team_Members/${e["user"]}/Presence", e["presence"]);
+      try {
+        link.val("${path}/Team_Members/${e["user"]}/Presence", e["presence"]);
+      } catch (e) {}
     });
 
     bot.on("team_join").listen((e) {
