@@ -12,7 +12,9 @@
   "configs": {
     "broker": {
       "type": "url"
+    },
+    "token": {
+      "type": "string"
     }
   }
 }
-
