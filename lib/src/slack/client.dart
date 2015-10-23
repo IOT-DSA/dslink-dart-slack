@@ -12,7 +12,25 @@ class SlackClient {
       parameters = {};
     }
 
-    var url = "https://slack.com/api/${method}?token=${token}";
+    for (var key in parameters.keys.toList()) {
+      parameters[key] = parameters[key].toString();
+    }
+
+    parameters["token"] = token;
+
+    var qs = "";
+    var i = 0;
+    for (var key in parameters.keys) {
+      if (i != 0) {
+        qs += "&";
+      }
+      qs += "${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(parameters[key])}";
+      i++;
+    }
+
+    var url = "https://slack.com/api/${method}?${qs}";
+
+    print(url);
 
     return client.post(url, body: JSON.encode(parameters)).then((response) {
       if (response.statusCode != 200) {
@@ -20,6 +38,7 @@ class SlackClient {
       }
 
       var json = JSON.decode(response.body);
+      print(json);
       if (!json["ok"]) {
         throw new SlackError(json["error"]);
       }
@@ -110,12 +129,30 @@ class SlackClient {
     });
   }
 
-  Future<Map<String, dynamic>> joinChannel(String name) {
+  Future<SlackChannel> joinChannel(String name) {
     return sendRequest("channels.join", parameters: {
       "name": name
     }).then((data) {
-      return data["channel"];
+      return SlackChannel.fromJSON(data["channel"]);
     });
+  }
+
+  Future<SlackTeamInfo> getTeamInfo() async {
+    var json = await sendRequest("team.info");
+    SlackTeamInfo info = SlackTeamInfo.fromJSON(json["team"]);
+    return info;
+  }
+
+  Future<List<SlackChannelMessage>> getChannelHistory(String channel, {int count}) async {
+    var request = {};
+    request["channel"] = channel;
+    if (count != null) {
+      request["count"] = count;
+    }
+    var response = await sendRequest("channels.history", parameters: request);
+    List<Map<String, dynamic>> msgs = response["messages"];
+
+    return msgs.map(SlackChannelMessage.fromJSON).toList();
   }
 
   Future leaveChannel(String id) {
@@ -180,6 +217,38 @@ class SlackUser {
   }
 }
 
+class SlackTeamInfo {
+  String id;
+  String name;
+  String image34;
+  String image44;
+  String image68;
+  String image88;
+  String image102;
+  String image132;
+  bool isImageDefault;
+
+  static SlackTeamInfo fromJSON(json) {
+    if (json == null) {
+      return null;
+    }
+
+    var id = json["id"];
+    var name = json["name"];
+    Map ic = json["icon"];
+    var x = new SlackTeamInfo();
+    x.id = id;
+    x.name = name;
+    x.image34 = ic["image_34"];
+    x.image44 = ic["image_44"];
+    x.image68 = ic["image_68"];
+    x.image102 = ic["image_102"];
+    x.image132 = ic["image_132"];
+    x.isImageDefault = ic["image_default"];
+    return x;
+  }
+}
+
 class SlackUserProfile {
   String firstName;
   String lastName;
@@ -221,6 +290,7 @@ class SlackChannel {
   int numberOfMembers;
   SlackChannelTopic topic;
   SlackChannelTopic purpose;
+  SlackChannelMessage latestMessage;
 
   static SlackChannel fromJSON(json) {
     var x = new SlackChannel();
@@ -233,6 +303,26 @@ class SlackChannel {
     x.numberOfMembers = json["num_members"];
     x.topic = SlackChannelTopic.fromJSON(json["topic"]);
     x.purpose = SlackChannelTopic.fromJSON(json["purpose"]);
+    x.latestMessage = SlackChannelMessage.fromJSON(json["latest"], channel: x.id);
+    return x;
+  }
+}
+
+class SlackChannelMessage {
+  String channel;
+  String text;
+  String ts;
+  String user;
+
+  static SlackChannelMessage fromJSON(json, {String channel}) {
+    if (json == null) {
+      return null;
+    }
+    var x = new SlackChannelMessage();
+    x.channel = channel == null ? json["channel"] : channel;
+    x.text = json["text"];
+    x.user = json["user"];
+    x.ts = json["ts"];
     return x;
   }
 }

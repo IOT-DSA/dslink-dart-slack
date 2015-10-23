@@ -107,12 +107,27 @@ class ConnectionNode extends SimpleNode {
   SlackBot bot;
 
   @override
-  onCreated() async {
+  onCreated() {
     var token = get(r"$$slack_token");
     client = new SlackClient(token);
+    doInit();
+  }
+
+  doInit() async {
     bot = await client.createBot();
+    var info = await client.getTeamInfo();
 
     var x = {
+      r"@icon": info.image34,
+      "Team_Name": {
+        r"$type": "string",
+        r"$name": "Team Name",
+        r"?value": info.name
+      },
+      "ID": {
+        r"$type": "string",
+        "?value": info.id
+      },
       "Team_Members": {
         r"$name": "Team Members",
         "List_All": {
@@ -153,12 +168,40 @@ class ConnectionNode extends SimpleNode {
       }
     };
 
-    for (var key in x.keys) {
+    for (String key in x.keys) {
+      if (key.startsWith(r"$")) {
+        configs[key] = x[key];
+        continue;
+      } else if (key.startsWith(r"@")) {
+        attributes[key] = x[key];
+        continue;
+      }
+
       try {
         link.removeNode("${path}/${key}");
       } catch (e) {}
       link.addNode("${path}/${key}", x[key]);
     }
+
+    updateList(r"$is");
+
+    bot.on("message").listen((e) {
+      String user = e["user"];
+      String channel = e["channel"];
+      String text = e["text"];
+      String id = e["ts"];
+
+      var node = link["${path}/Channels/${channel}"];
+      if (node == null) {
+        return;
+      }
+      SimpleNode mn = node.getChild("Message");
+      mn.updateValue(new ValueUpdate(text));
+      SimpleNode idn = mn.getChild("ID");
+      SimpleNode un = mn.getChild("User");
+      idn.updateValue(id);
+      un.updateValue(new ValueUpdate(user));
+    });
 
     bot.on("user_change").listen((e) {
       syncUsers();
@@ -229,6 +272,12 @@ class ConnectionNode extends SimpleNode {
   addChannel(SlackChannel channel) async {
     var p = "${path}/Channels/${channel.id}";
     link.removeNode(p);
+    try {
+      channel = await client.getChannelInfo(channel.id);
+    } catch (e) {}
+    SlackChannelMessage msg = channel.latestMessage == null ?
+      new SlackChannelMessage() :
+      channel.latestMessage;
     var m = {
       r"$name": channel.name,
       "ID": {
@@ -271,6 +320,18 @@ class ConnectionNode extends SimpleNode {
           r"$type": "number",
           "?value": channel.purpose.lastSet
         }
+      },
+      "Message": {
+        r"$type": "string",
+        "?value": msg.text,
+        "User": {
+          r"$type": "string",
+          "?value": msg.user
+        },
+        "ID": {
+          r"$type": "string",
+          "?value": msg.ts
+        }
       }
     };
 
@@ -303,6 +364,7 @@ class ConnectionNode extends SimpleNode {
           bot.initialState["users"].firstWhere((x) => x["id"] == user.id)["presence"] :
           await client.getUserPresence(user.id)
     );
+
     link.addNode("${path}/Team_Members/${user.id}", {
       r"$name": user.profile.realName != null && user.profile.realName.isNotEmpty ? user.profile.realName : user.name,
       r"@icon": user.profile.image32,
